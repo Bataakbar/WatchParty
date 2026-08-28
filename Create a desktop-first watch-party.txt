@@ -1,0 +1,1171 @@
+Build a production-ready, desktop-first watch-party web application inspired by the concept of Rave.
+
+## 1. CORE PRODUCT CONCEPT
+
+The application is a synchronized watch-party platform.
+
+The PRIMARY behavior is NOT screen sharing.
+
+The PRIMARY behavior is:
+
+1. A Host creates a watch room.
+2. The system generates a short room code.
+3. The Host opens a supported video page in the target website using their browser.
+4. Guests join the room using the room code.
+5. When the Host opens or changes to a supported video page, Guests automatically navigate to the same supported video page.
+6. Each user's own browser loads and plays the video independently.
+7. The application synchronizes playback state between Host and Guests.
+8. The actual video/media data must NEVER pass through the application's backend.
+9. Screen sharing must NOT be used for normal playback.
+10. Screen sharing can exist only as an optional secondary feature in the future.
+
+The intended experience is:
+
+Host opens video
+→ Guest automatically opens the same video
+→ Guest loads the video locally
+→ Host presses Play
+→ Guest automatically plays
+→ Host pauses
+→ Guest pauses
+→ Host seeks
+→ Guest seeks
+→ playback remains synchronized.
+
+This is a WATCH-PARTY / SYNCHRONIZATION application, not a video streaming proxy.
+
+---
+
+# 2. SUPPORTED WEBSITE
+
+The application should initially focus on ONE supported video website:
+
+https://filmapik.college/
+
+Do NOT build a generic "support every website" system.
+
+Implement the website integration as a dedicated adapter so the architecture remains extensible.
+
+Important:
+
+* Do not download videos.
+* Do not proxy video streams.
+* Do not re-host video.
+* Do not store copies of videos.
+* Do not bypass DRM.
+* Do not extract protected media URLs.
+* Do not circumvent authentication or access controls.
+* Do not redistribute video content through the application server.
+
+The application should only synchronize the playback state of the user's own browser session.
+
+Because third-party player behavior may vary, isolate all website-specific logic inside a dedicated browser-extension adapter.
+
+---
+
+# 3. ARCHITECTURE
+
+Use this architecture:
+
+```
+              WATCH PARTY WEB APP
+                     │
+                WebSocket
+                     │
+              ┌──────▼──────┐
+              │   FastAPI   │
+              │   Backend   │
+              └──────┬──────┘
+                     │
+          ┌──────────┼──────────┐
+          │          │          │
+         Host      Guest 1    Guest 2
+          │          │          │
+   Browser Extension on each client
+          │          │          │
+          ▼          ▼          ▼
+      Target Website / Video Player
+          │          │          │
+          └──── Playback Sync ───┘
+```
+
+Video data must remain between the user's browser and the video website.
+
+The backend handles:
+
+* room management
+* participant management
+* playback synchronization
+* navigation synchronization
+* host authority
+* chat
+* presence
+* reconnect state
+* WebSocket communication
+* authentication/session logic
+
+---
+
+# 4. TECHNOLOGY STACK
+
+## Frontend
+
+Use:
+
+* Next.js
+* React
+* TypeScript
+* App Router
+* Tailwind CSS
+* shadcn/ui
+* Lucide React
+
+Next.js is responsible for:
+
+* application UI
+* routing
+* pages
+* watch room interface
+* create/join room interface
+* participant list
+* chat
+* room controls
+* client-side communication with FastAPI
+
+Do NOT put core room logic directly into Next.js server actions.
+
+---
+
+# 5. BACKEND
+
+Use:
+
+* Python
+* FastAPI
+* Uvicorn
+* WebSocket
+* Pydantic
+* SQLAlchemy
+* Alembic
+
+FastAPI is responsible for:
+
+* REST API
+* WebSocket connections
+* room management
+* participant state
+* host authority
+* synchronization engine
+* chat events
+* connection state
+* validation
+* authentication support
+
+Suggested structure:
+
+backend/
+├── app/
+│   ├── main.py
+│   ├── config.py
+│   ├── dependencies.py
+│   │
+│   ├── api/
+│   │   ├── rooms.py
+│   │   ├── users.py
+│   │   └── health.py
+│   │
+│   ├── websocket/
+│   │   ├── manager.py
+│   │   ├── handlers.py
+│   │   └── events.py
+│   │
+│   ├── services/
+│   │   ├── room_service.py
+│   │   ├── sync_service.py
+│   │   ├── chat_service.py
+│   │   └── participant_service.py
+│   │
+│   ├── models/
+│   │   ├── room.py
+│   │   ├── user.py
+│   │   └── participant.py
+│   │
+│   └── schemas/
+│       ├── room.py
+│       ├── sync.py
+│       └── chat.py
+│
+├── migrations/
+└── requirements.txt
+
+---
+
+# 6. REAL-TIME COMMUNICATION
+
+Use native WebSocket through FastAPI.
+
+Do NOT use WebRTC for normal playback.
+
+WebSocket is responsible for:
+
+* create/join room events
+* participant presence
+* media navigation
+* playback events
+* synchronization
+* chat
+* reconnection
+
+Example event:
+
+{
+"type": "PLAY",
+"room_id": "K7X92P",
+"position": 523.42,
+"timestamp": 1750000000000
+}
+
+---
+
+# 7. DATABASE
+
+Use PostgreSQL.
+
+Use SQLAlchemy ORM and Alembic migrations.
+
+Suggested tables:
+
+## users
+
+* id
+* username
+* avatar
+* created_at
+
+## rooms
+
+* id
+* room_code
+* host_id
+* current_url
+* media_id
+* playback_position
+* is_playing
+* playback_rate
+* created_at
+* updated_at
+* expires_at
+
+## participants
+
+* id
+* room_id
+* user_id
+* role
+* connected
+* joined_at
+* last_seen
+
+## chat_messages
+
+* id
+* room_id
+* user_id
+* message
+* created_at
+
+For MVP, room state may initially be stored in memory, but structure the code so PostgreSQL can become the persistent source of truth.
+
+---
+
+# 8. ROOM SYSTEM
+
+Users can:
+
+* Create Room
+* Join Room
+* Leave Room
+* Copy Room Code
+
+Example:
+
+Room Code:
+
+K7X92P
+
+Host:
+
+Bata
+
+Participants:
+
+Bata
+Andi
+Budi
+Citra
+
+Roles:
+
+HOST
+GUEST
+
+Only the Host can control authoritative playback.
+
+---
+
+# 9. JOIN FLOW
+
+When a Guest joins:
+
+1. Guest enters room code.
+2. Frontend requests room information.
+3. Frontend establishes WebSocket connection.
+4. Server validates the room.
+5. Server adds the participant.
+6. Server sends current room state.
+7. Browser extension is notified of the current media URL.
+8. Extension opens the same supported URL.
+9. Extension waits for the player to become ready.
+10. Extension reports PLAYER_READY.
+11. Server sends the authoritative playback state.
+12. Guest seeks to the correct position.
+13. Guest starts playing if the Host is currently playing.
+
+The guest should NOT manually enter the video URL again.
+
+---
+
+# 10. HOST AUTHORITY
+
+The Host is authoritative.
+
+The Host controls:
+
+* open video
+* navigation
+* play
+* pause
+* seek
+* playback speed
+
+When a Host action happens:
+
+Host
+→ Browser Extension
+→ WebSocket
+→ FastAPI
+→ Room Sync Engine
+→ Guests
+→ Guest Browser Extensions
+→ Guest Video Player
+
+---
+
+# 11. PLAYBACK EVENTS
+
+Implement:
+
+* MEDIA_OPEN
+* MEDIA_READY
+* PLAY
+* PAUSE
+* SEEK
+* RATE_CHANGE
+* ENDED
+* SYNC_REQUEST
+* SYNC_RESPONSE
+
+Also support:
+
+* PLAYER_LOADING
+* PLAYER_ERROR
+* PLAYER_TIMEOUT
+* PLAYER_UNAVAILABLE
+
+---
+
+# 12. PLAYBACK SYNCHRONIZATION
+
+Do NOT send playback position continuously on every animation frame.
+
+Use an event-driven synchronization system.
+
+Immediately send:
+
+* PLAY
+* PAUSE
+* SEEK
+* RATE_CHANGE
+* MEDIA_OPEN
+
+Additionally send periodic synchronization snapshots every 2–5 seconds.
+
+Example:
+
+{
+"type": "SYNC_STATE",
+"position": 923.42,
+"playing": true,
+"rate": 1.0,
+"timestamp": 1750000000000
+}
+
+The Guest calculates expected playback position based on the timestamp.
+
+Example:
+
+Host:
+923.42
+
+Guest:
+923.21
+
+Difference:
+0.21 seconds
+
+Do not perform a hard seek.
+
+Instead, gently correct playback if possible.
+
+Example:
+
+Host:
+923.42
+
+Guest:
+916.20
+
+Difference:
+7.22 seconds
+
+Perform:
+
+video.currentTime = authoritativePosition
+
+Then resume playback.
+
+---
+
+# 13. CLOCK SYNCHRONIZATION
+
+Implement a simple server-time synchronization mechanism.
+
+The server provides an authoritative timestamp.
+
+Clients estimate server clock offset during connection.
+
+Use this offset when calculating playback position.
+
+This reduces synchronization drift between clients.
+
+---
+
+# 14. BROWSER EXTENSION
+
+Build a Chrome/Chromium extension using:
+
+* TypeScript
+* Manifest V3
+* Content Scripts
+* Background Service Worker
+* Message passing
+
+Folder structure:
+
+extension/
+├── manifest.json
+├── src/
+│   ├── background/
+│   │   └── service-worker.ts
+│   ├── content/
+│   │   ├── content.ts
+│   │   ├── player-detector.ts
+│   │   └── site-adapter.ts
+│   ├── popup/
+│   │   └── popup.tsx
+│   └── shared/
+│       ├── messages.ts
+│       └── types.ts
+└── package.json
+
+---
+
+# 15. EXTENSION RESPONSIBILITIES
+
+The extension is the bridge between the Watch Party application and the supported video website.
+
+It must:
+
+1. Detect supported pages.
+2. Detect video players.
+3. Detect video readiness.
+4. Detect current URL.
+5. Detect media ID when possible.
+6. Detect play.
+7. Detect pause.
+8. Detect seek.
+9. Detect playback position.
+10. Detect duration.
+11. Detect playback rate.
+12. Execute playback commands.
+13. Navigate to URLs received from the Host.
+14. Report player readiness.
+15. Report player errors.
+16. Reconnect automatically.
+
+---
+
+# 16. MEDIA ADAPTER
+
+Create a standardized media adapter interface:
+
+interface MediaAdapter {
+detect(): boolean;
+getUrl(): string | null;
+getMediaId(): string | null;
+play(): Promise<void>;
+pause(): Promise<void>;
+seek(position: number): Promise<void>;
+getPosition(): number;
+getDuration(): number;
+setPlaybackRate(rate: number): Promise<void>;
+isPlaying(): boolean;
+}
+
+Then implement:
+
+* GenericHTML5VideoAdapter
+* FilmapikAdapter
+
+All synchronization logic must use the MediaAdapter interface.
+
+The backend must NOT contain website-specific player logic.
+
+---
+
+# 17. WEBSITE NAVIGATION SYNCHRONIZATION
+
+When Host navigates to a different supported movie page:
+
+1. Extension detects URL change.
+2. Extension identifies the media page.
+3. Extension sends MEDIA_OPEN to FastAPI.
+4. FastAPI updates room state.
+5. FastAPI broadcasts MEDIA_OPEN to Guests.
+6. Guest extensions receive the event.
+7. Guest browsers navigate to the same supported URL.
+8. Extensions wait for video player initialization.
+9. Guests report PLAYER_READY.
+10. Server sends the authoritative playback position.
+11. Guests seek and play.
+
+Expected behavior:
+
+Host:
+Open Movie A
+
+Guests:
+Automatically open Movie A
+
+Host:
+Play
+
+Guests:
+Automatically Play
+
+Host:
+Seek to 25:30
+
+Guests:
+Automatically seek to 25:30
+
+---
+
+# 18. MULTI-PLAYER / EXTERNAL PLAYER HANDLING
+
+The supported site may contain multiple player containers, embedded iframes, or different player implementations.
+
+Do not hardcode one fragile DOM selector throughout the entire application.
+
+Create a dedicated player detection layer.
+
+The adapter should attempt to:
+
+1. detect the active player
+2. determine whether it is an HTML5 video element
+3. monitor player events
+4. handle page navigation
+5. handle player replacement
+6. handle delayed player initialization
+
+Gracefully display:
+
+"Player not detected"
+
+when a compatible player cannot be found.
+
+Never attempt to bypass DRM or protected playback mechanisms.
+
+---
+
+# 19. CHAT
+
+Implement real-time room chat.
+
+Features:
+
+* send message
+* receive message
+* timestamps
+* username
+* host badge
+* auto-scroll
+* message validation
+* rate limiting
+
+WebSocket event:
+
+{
+"type": "CHAT_MESSAGE",
+"message": "Let's watch this one!"
+}
+
+---
+
+# 20. PARTICIPANT SYSTEM
+
+Display:
+
+* avatar
+* username
+* host badge
+* online/offline status
+* connection quality/status
+
+Example:
+
+🟢 Bata — Host
+🟢 Andi
+🟢 Budi
+🟡 Citra — Synchronizing
+
+---
+
+# 21. USER EXPERIENCE
+
+Desktop-first.
+
+The interface should feel like a modern streaming/watch-party application rather than an admin dashboard.
+
+Visual direction:
+
+* dark theme by default
+* large media area
+* subtle glass/transparent surfaces
+* rounded cards
+* clean spacing
+* minimal but polished animations
+* responsive sidebar
+* modern typography
+* no excessive gradients
+* no unnecessary decorative UI
+* no "AI-generated" visual style
+* prioritize usability
+
+Main layout:
+
+┌────────────────────────────────────────────────────────────┐
+│ WatchTogether                         Room: K7X92P [Copy] │
+├───────────────────────────────────────────────┬────────────┤
+│                                               │            │
+│                                               │ Participants
+│                                               │            │
+│                   VIDEO                       │ Bata       │
+│                                               │ Andi       │
+│                                               │ Budi       │
+│                                               │            │
+│                                               │────────────│
+│                                               │ Chat       │
+│                                               │            │
+│                                               │ Hello!     │
+│                                               │            │
+├───────────────────────────────────────────────┴────────────┤
+│ ▶  ━━━━━━━━━━━━━●━━━━━━━━━━  25:30 / 1:42:20   1.0x  ⚙ │
+└────────────────────────────────────────────────────────────┘
+
+---
+
+# 22. STATUS INDICATORS
+
+Always display connection state clearly:
+
+* Connected
+* Reconnecting
+* Disconnected
+* Loading player
+* Player ready
+* Synchronizing
+* Synced
+* Player unavailable
+
+Examples:
+
+🟢 Connected
+
+🟡 Synchronizing...
+
+🟢 Synced with Host
+
+🔴 Player unavailable
+
+---
+
+# 23. HOME PAGE
+
+Create a simple landing page with:
+
+Logo:
+WatchTogether
+
+Description:
+"Watch together. Stay synchronized."
+
+Buttons:
+
+[ Create Room ]
+
+[ Join Room ]
+
+Also show a small explanation:
+
+* Create a room
+* Share the code
+* Open the supported video
+* Watch together
+
+---
+
+# 24. CREATE ROOM PAGE
+
+User clicks:
+
+Create Room
+
+Server creates:
+
+* room ID
+* room code
+* host session
+
+Redirect to:
+
+/room/K7X92P
+
+---
+
+# 25. JOIN ROOM PAGE
+
+Input:
+
+Room Code
+
+[ K7X92P ]
+
+[ Join Room ]
+
+Validate:
+
+* code format
+* room existence
+* room capacity
+* room status
+
+Then enter watch room.
+
+---
+
+# 26. WATCH ROOM ROUTE
+
+Example:
+
+/room/K7X92P
+
+The page must:
+
+* connect to WebSocket
+* retrieve room state
+* show participants
+* show chat
+* show media state
+* communicate with browser extension
+* show synchronization status
+
+---
+
+# 27. ERROR HANDLING
+
+Handle:
+
+* invalid room code
+* room expired
+* room full
+* WebSocket disconnect
+* browser extension unavailable
+* player not found
+* unsupported page
+* player loading timeout
+* synchronization failure
+
+Provide clear user-facing messages.
+
+Do not expose raw stack traces.
+
+---
+
+# 28. RECONNECTION
+
+When a user temporarily loses connection:
+
+1. automatically reconnect WebSocket
+2. identify the same participant session
+3. retrieve current room state
+4. compare current media
+5. synchronize position
+6. restore playback state
+
+Do not force the user to leave and rejoin manually.
+
+---
+
+# 29. ROOM EXPIRATION
+
+Rooms should automatically expire after a configurable period of inactivity.
+
+Example:
+
+ROOM_EXPIRATION_MINUTES=30
+
+When Host leaves:
+
+* optionally transfer Host role to another participant
+* or close the room if no replacement is available
+
+Implement host transfer cleanly.
+
+---
+
+# 30. SECURITY
+
+Implement:
+
+* input validation
+* WebSocket validation
+* room authorization
+* host permission checks
+* rate limiting
+* chat message limits
+* secure cookies or token-based sessions
+* CORS configuration
+* environment variables
+* server-side validation of synchronization events
+
+Never trust the client.
+
+Never allow Guests to impersonate the Host.
+
+---
+
+# 31. ENVIRONMENT VARIABLES
+
+Frontend:
+
+NEXT_PUBLIC_API_URL=
+NEXT_PUBLIC_WS_URL=
+
+Backend:
+
+DATABASE_URL=
+SECRET_KEY=
+CORS_ORIGINS=
+ROOM_EXPIRATION_MINUTES=30
+
+Never commit secrets.
+
+Create:
+
+.env.example
+
+---
+
+# 32. DEVELOPMENT SETUP
+
+Monorepo:
+
+watch-party/
+├── apps/
+│   ├── web/
+│   ├── api/
+│   └── extension/
+│
+├── packages/
+│   └── shared/
+│
+├── docker-compose.yml
+├── README.md
+└── package.json
+
+Development services:
+
+* Next.js
+* FastAPI
+* PostgreSQL
+
+Optional:
+
+* Redis for future scaling
+
+Do NOT require Redis for MVP.
+
+---
+
+# 33. SHARED TYPES
+
+Create a shared definition for synchronization events.
+
+Events should include:
+
+type:
+JOIN_ROOM
+LEAVE_ROOM
+MEDIA_OPEN
+MEDIA_READY
+PLAY
+PAUSE
+SEEK
+RATE_CHANGE
+SYNC_REQUEST
+SYNC_RESPONSE
+CHAT_MESSAGE
+USER_JOINED
+USER_LEFT
+HOST_CHANGED
+
+Use strongly typed event structures wherever possible.
+
+---
+
+# 34. DEPLOYMENT
+
+The application should be deployable using free tiers for MVP/demo purposes.
+
+Recommended:
+
+Frontend:
+Vercel
+
+Backend:
+Render or another platform supporting FastAPI + WebSocket
+
+Database:
+Supabase PostgreSQL or another PostgreSQL free tier
+
+Repository:
+GitHub
+
+Browser Extension:
+Build locally and load as an unpacked extension during development.
+
+The architecture should NOT depend on paid infrastructure during development.
+
+Important:
+Free-tier hosting may sleep or have limitations. The application must remain portable so the FastAPI backend can later be moved to a VPS.
+
+---
+
+# 35. OPTIONAL FUTURE FEATURES
+
+Do not implement these before the core synchronization works:
+
+* voice chat
+* screen sharing
+* video calls
+* emoji reactions
+* synchronized subtitles
+* voting
+* playlists
+* room privacy
+* friend system
+* user accounts
+* room history
+* watch history
+* mobile application
+
+WebRTC should only be introduced when implementing voice/video/screen-sharing features.
+
+---
+
+# 36. MVP ACCEPTANCE CRITERIA
+
+The MVP is considered successful only when all of these work:
+
+### Test 1
+
+Host creates room.
+
+### Test 2
+
+Guest joins using room code.
+
+### Test 3
+
+Both users appear in participant list.
+
+### Test 4
+
+Host opens a supported video page.
+
+### Test 5
+
+Guest browser automatically navigates to the same video page.
+
+### Test 6
+
+Guest player becomes ready.
+
+### Test 7
+
+Host presses Play.
+
+### Test 8
+
+Guest automatically plays the same video.
+
+### Test 9
+
+Host presses Pause.
+
+### Test 10
+
+Guest pauses.
+
+### Test 11
+
+Host seeks.
+
+### Test 12
+
+Guest seeks to approximately the same position.
+
+### Test 13
+
+Playback remains synchronized over time.
+
+### Test 14
+
+Guest refreshes the page and reconnects.
+
+### Test 15
+
+Host leaves and host transfer/room closure behaves correctly.
+
+### Test 16
+
+The backend never receives or forwards the actual video stream.
+
+---
+
+# 37. CRITICAL IMPLEMENTATION RULE
+
+Do NOT build a fake demonstration where the Host's video is copied, embedded into the application, or streamed to Guests.
+
+The real implementation must prove this flow:
+
+Host browser
+→ supported website
+
+Guest browser
+→ same supported website
+
+Backend
+→ only synchronization state
+
+This is the central requirement of the entire project.
+
+---
+
+# 38. DEVELOPMENT PRIORITY
+
+Implement in this order:
+
+1. Next.js UI
+2. FastAPI REST API
+3. Room creation
+4. Room joining
+5. WebSocket connection
+6. Participant presence
+7. Generic HTML5 test player
+8. Synchronization engine
+9. Chrome Extension
+10. Supported website adapter
+11. Automatic URL navigation
+12. Automatic playback synchronization
+13. Chat
+14. Reconnection
+15. PostgreSQL persistence
+16. Deployment
+
+Do not move to the next stage until the previous stage works correctly.
+
+---
+
+# 39. CODE QUALITY
+
+Use:
+
+* strict TypeScript
+* Python type hints
+* Pydantic validation
+* ESLint
+* Prettier
+* clear component boundaries
+* reusable services
+* reusable synchronization logic
+* typed WebSocket events
+* unit tests for sync calculations
+* integration tests for room behavior
+
+The synchronization engine should be isolated from the UI so that it can be tested independently.
+
+---
+
+# 40. FINAL PRODUCT GOAL
+
+The final product should feel like:
+
+"Rave, but focused on one supported website."
+
+The ideal experience is:
+
+1. Open WatchTogether.
+2. Click Create Room.
+3. Share the code with friends.
+4. Friends join.
+5. Host opens a movie on the supported website.
+6. Everyone's browser automatically opens the same movie.
+7. Everyone watches from their own browser.
+8. Playback remains synchronized.
+9. Chat remains available alongside the video.
+10. No video is streamed through the WatchTogether server.
+
+Prioritize:
+
+1. synchronization accuracy
+2. automatic navigation
+3. player reliability
+4. reconnect reliability
+5. simple UX
+6. low infrastructure cost
+7. clean architecture
+8. extensibility
+
+Do not prioritize unnecessary visual effects or extra features before the core watch-party functionality is reliable.

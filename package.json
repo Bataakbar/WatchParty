@@ -1,0 +1,23 @@
+{
+  "name": "watch-party",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace @watchparty/web",
+    "build:web": "npm run build --workspace @watchparty/web",
+    "lint:web": "npm run lint --workspace @watchparty/web",
+    "typecheck:web": "npm run typecheck --workspace @watchparty/web",
+    "build:extension": "npm run build --workspace @watchparty/extension",
+    "typecheck:shared": "npm run typecheck --workspace @watchparty/shared"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
