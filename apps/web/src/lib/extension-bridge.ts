@@ -1,4 +1,4 @@
-import type { ClientEvent } from "@watchparty/shared";
+import type { ClientEvent, ServerEvent } from "@watchparty/shared";
 
 interface ExtensionHello {
   source: "watchparty-extension";
@@ -55,7 +55,7 @@ function waitForReply(id: string, timeoutMs: number): Promise<void> {
   });
 }
 
-export async function relayEvent(event: ClientEvent, timeoutMs = 3000): Promise<void> {
+export async function relayEvent(event: ClientEvent | ServerEvent, timeoutMs = 3000): Promise<void> {
   const id = `evt-${++pendingId}-${Date.now()}`;
   sendToExtension({ source: "watchparty-web", type: "RELAY_EVENT", id, event });
   await waitForReply(id, timeoutMs);

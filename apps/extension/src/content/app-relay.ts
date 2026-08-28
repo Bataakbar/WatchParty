@@ -1,7 +1,7 @@
-import type { ClientEvent } from "@watchparty/shared";
+import type { ClientEvent, ServerEvent } from "@watchparty/shared";
 import type { ContentToWorkerEvent } from "../shared/messages";
 
-function forwardToWorker(event: ClientEvent): void {
+function forwardToWorker(event: ClientEvent | ServerEvent): void {
   const message: ContentToWorkerEvent = { source: "wt-content", kind: "EVENT", event };
   chrome.runtime.sendMessage(message).catch(() => {});
 }
@@ -10,7 +10,7 @@ export function startAppRelay(): void {
   window.addEventListener("message", (event: MessageEvent) => {
     if (event.origin !== window.location.origin) return;
     const data = event.data as
-      | { source?: string; type?: string; id?: string; event?: ClientEvent }
+      | { source?: string; type?: string; id?: string; event?: ClientEvent | ServerEvent }
       | undefined;
     if (!data || data.source !== "watchparty-web") return;
 

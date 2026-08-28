@@ -1,4 +1,4 @@
-import type { ClientEvent } from "@watchparty/shared";
+import type { ClientEvent, ServerEvent } from "@watchparty/shared";
 
 export type PlayerStatusValue =
   | "LOADING"
@@ -14,7 +14,7 @@ export interface ContentToWorkerHello {
 export interface ContentToWorkerEvent {
   source: "wt-content";
   kind: "EVENT";
-  event: ClientEvent;
+  event: ClientEvent | ServerEvent;
   originTabId?: number;
 }
 
@@ -23,13 +23,13 @@ export type ContentToWorker = ContentToWorkerHello | ContentToWorkerEvent;
 export interface WorkerToAppRelayEvent {
   source: "wt-worker";
   kind: "EXT_EVENT";
-  event: ClientEvent;
+  event: ClientEvent | ServerEvent;
 }
 
 export interface WorkerToSiteCommand {
   source: "wt-worker";
   kind: "COMMAND";
-  command: Extract<ClientEvent, { type: "PLAY" | "PAUSE" | "SEEK" | "RATE_CHANGE" | "MEDIA_OPEN" }>;
+  command: ClientEvent | ServerEvent;
 }
 
 export type WorkerToContent = WorkerToAppRelayEvent | WorkerToSiteCommand;

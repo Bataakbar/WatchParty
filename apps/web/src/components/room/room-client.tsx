@@ -46,6 +46,9 @@ export default function RoomClient({ username }: { username: string }) {
     if (event.type === "JOINED") {
       const self = event.participants.find((p) => p.id === event.participantId);
       setIsHost(self?.role === "HOST");
+      relayEvent(event).catch(() => {});
+    } else if (event.type === "CHAT_MESSAGE" || event.type === "ROOM_STATE") {
+      relayEvent(event).catch(() => {});
     }
   }, []);
 

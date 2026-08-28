@@ -1,4 +1,4 @@
-import type { ClientEvent } from "@watchparty/shared";
+import type { ClientEvent, ServerEvent } from "@watchparty/shared";
 import type {
   ContentToWorker,
   WorkerToAppRelayEvent,
@@ -17,7 +17,7 @@ interface State {
 const state: State = { appTabIds: new Set(), siteTabId: null, siteFrameId: null };
 
 function isPlaybackCommand(
-  event: ClientEvent,
+  event: ClientEvent | ServerEvent,
 ): event is Extract<ClientEvent, { type: "PLAY" | "PAUSE" | "SEEK" | "RATE_CHANGE" }> {
   return (
     event.type === "PLAY" ||
@@ -48,14 +48,14 @@ async function ensureSiteTab(url: string): Promise<number | null> {
   }
 }
 
-async function forwardToApp(event: ClientEvent): Promise<void> {
+async function forwardToApp(event: ClientEvent | ServerEvent): Promise<void> {
   for (const tabId of state.appTabIds) {
     const message: WorkerToAppRelayEvent = { source: "wt-worker", kind: "EXT_EVENT", event };
     await chrome.tabs.sendMessage(tabId, message).catch(() => {});
   }
 }
 
-async function forwardToSite(command: Extract<ClientEvent, { type: string }>): Promise<void> {
+async function forwardToSite(command: ClientEvent | ServerEvent): Promise<void> {
   let siteTabId = state.siteTabId;
   if (siteTabId === null) {
     const tabs = await chrome.tabs.query({ url: SITE_MATCH });
@@ -66,10 +66,10 @@ async function forwardToSite(command: Extract<ClientEvent, { type: string }>): P
   const message: WorkerToSiteCommand = {
     source: "wt-worker",
     kind: "COMMAND",
-    command: command as never,
+    command,
   };
   const frameId = state.siteFrameId;
-  if (frameId !== null) {
+  if (frameId !== null && isPlaybackCommand(command)) {
     await chrome.tabs.sendMessage(siteTabId, message, { frameId }).catch(async () => {
       state.siteFrameId = null;
       await chrome.tabs.sendMessage(siteTabId as number, message).catch(() => {});
@@ -123,6 +123,15 @@ chrome.runtime.onMessage.addListener((message: ContentToWorker, sender, sendResp
       if (isPlaybackCommand(event)) {
         await forwardToSite(event);
         return;
+      }
+      if (
+        event.type === "CHAT_MESSAGE" ||
+        event.type === "ROOM_STATE" ||
+        event.type === "JOINED" ||
+        event.type === "USER_JOINED" ||
+        event.type === "USER_LEFT"
+      ) {
+        await forwardToSite(event);
       }
       await forwardToApp(event);
     })();

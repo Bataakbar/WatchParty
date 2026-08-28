@@ -1,6 +1,7 @@
-import type { ClientEvent } from "@watchparty/shared";
+import type { ClientEvent, ServerEvent } from "@watchparty/shared";
 import { FilmapikAdapter } from "./filmapik-adapter";
 import { findVideo } from "./player-detector";
+import { ChatWidget } from "./chat-widget";
 import type { ContentToWorkerEvent } from "../shared/messages";
 
 const DETECTION_TIMEOUT_MS = 20000;
@@ -22,6 +23,11 @@ export function startSiteAgent(): void {
   if (!FilmapikAdapter.supportsLocation(window.location.href)) return;
 
   const adapter = new FilmapikAdapter();
+  const chatWidget = new ChatWidget();
+  chatWidget.setOnSend((text) => {
+    sendToWorker({ type: "CHAT_MESSAGE", message: text });
+  });
+
   let lastUrl = window.location.href;
   let suppressUntil = 0;
 
@@ -85,14 +91,29 @@ export function startSiteAgent(): void {
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.source !== "wt-worker") return;
     if (message.kind === "COMMAND") {
-      const event = message.command as ClientEvent;
+      const event = message.command as ClientEvent | ServerEvent;
+      if (event.type === "CHAT_MESSAGE" && "username" in event && "createdAt" in event) {
+        chatWidget.addMessage({
+          id: event.id,
+          username: event.username,
+          role: event.role,
+          message: event.message,
+          createdAt: event.createdAt,
+        });
+        return;
+      }
+      if (event.type === "JOINED" || event.type === "ROOM_STATE") {
+        if (event.room?.code) {
+          chatWidget.setRoomInfo(event.room.code);
+        }
+      }
       if (
         event.type === "PLAY" ||
         event.type === "PAUSE" ||
         event.type === "SEEK" ||
         event.type === "RATE_CHANGE"
       ) {
-        void execute(event);
+        void execute(event as SiteCommand);
       }
     }
   });
