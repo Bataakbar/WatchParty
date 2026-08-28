@@ -3,6 +3,7 @@ import { FilmapikAdapter } from "./filmapik-adapter";
 import { findVideo } from "./player-detector";
 import { ChatWidget } from "./chat-widget";
 import type { ContentToWorkerEvent } from "../shared/messages";
+import { safeSendMessage } from "../shared/runtime";
 
 const DETECTION_TIMEOUT_MS = 20000;
 const URL_POLL_MS = 800;
@@ -11,7 +12,7 @@ const POSITION_REPORT_MS = 1000;
 
 function sendToWorker(event: ClientEvent): void {
   const message: ContentToWorkerEvent = { source: "wt-content", kind: "EVENT", event };
-  chrome.runtime.sendMessage(message).catch(() => {});
+  safeSendMessage(message);
 }
 
 type SiteCommand = Extract<

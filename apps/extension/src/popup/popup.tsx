@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { safeSendMessage } from "../shared/runtime";
 
 interface Status {
   appTabs: number[];
@@ -14,8 +15,8 @@ function Popup() {
   const [status, setStatus] = useState<Status | null>(null);
 
   useEffect(() => {
-    chrome.runtime.sendMessage({ type: "GET_STATUS" }, (res) => {
-      if (res) setStatus(res as Status);
+    safeSendMessage<Status>({ type: "GET_STATUS" }, (res) => {
+      if (res) setStatus(res);
     });
   }, []);
 

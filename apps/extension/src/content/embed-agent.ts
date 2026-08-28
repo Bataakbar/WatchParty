@@ -1,6 +1,7 @@
 import type { ClientEvent } from "@watchparty/shared";
 import { GenericHTML5VideoAdapter } from "./generic-adapter";
 import { findVideo } from "./player-detector";
+import { safeSendMessage } from "../shared/runtime";
 
 const DETECT_TIMEOUT_MS = 15000;
 const POSITION_REPORT_MS = 1000;
@@ -22,7 +23,7 @@ export function startEmbedAgent(): void {
   window.__wtEmbedAgent = true;
 
   const send = (event: ClientEvent) => {
-    chrome.runtime.sendMessage({ source: "wt-content", kind: "EVENT", event }).catch(() => {});
+    safeSendMessage({ source: "wt-content", kind: "EVENT", event });
   };
 
   const adapter = new GenericHTML5VideoAdapter();
