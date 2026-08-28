@@ -1,7 +1,7 @@
 import type { ClientEvent } from "@watchparty/shared";
 import { GenericHTML5VideoAdapter } from "./generic-adapter";
 import { findVideo } from "./player-detector";
-import { safeSendMessage } from "../shared/runtime";
+import { isExtensionValid, safeSendMessage } from "../shared/runtime";
 
 const DETECT_TIMEOUT_MS = 15000;
 const POSITION_REPORT_MS = 1000;
@@ -30,7 +30,7 @@ export function startEmbedAgent(): void {
   let suppressUntil = 0;
 
   adapter.setChangeListener((change) => {
-    if (Date.now() < suppressUntil) return;
+    if (!isExtensionValid() || Date.now() < suppressUntil) return;
     switch (change.type) {
       case "play":
         send({ type: "PLAY", position: change.position });
@@ -51,6 +51,7 @@ export function startEmbedAgent(): void {
   });
 
   async function execute(command: SiteCommand): Promise<void> {
+    if (!isExtensionValid()) return;
     suppressUntil = Date.now() + SUPPRESS_MS;
     try {
       switch (command.type) {
@@ -76,20 +77,30 @@ export function startEmbedAgent(): void {
     }
   }
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.source !== "wt-worker" || message.kind !== "COMMAND") return;
-    const event = message.command as ClientEvent;
-    if (
-      event.type === "PLAY" ||
-      event.type === "PAUSE" ||
-      event.type === "SEEK" ||
-      event.type === "RATE_CHANGE"
-    ) {
-      void execute(event);
+  if (isExtensionValid()) {
+    try {
+      chrome.runtime.onMessage.addListener((message) => {
+        if (message?.source !== "wt-worker" || message.kind !== "COMMAND") return;
+        const event = message.command as ClientEvent;
+        if (
+          event.type === "PLAY" ||
+          event.type === "PAUSE" ||
+          event.type === "SEEK" ||
+          event.type === "RATE_CHANGE"
+        ) {
+          void execute(event);
+        }
+      });
+    } catch {
+      // ignore
     }
-  });
+  }
 
   const poll = setInterval(() => {
+    if (!isExtensionValid()) {
+      clearInterval(poll);
+      return;
+    }
     const found = findVideo();
     if (found && !adapter.detect()) {
       clearInterval(poll);
@@ -98,9 +109,15 @@ export function startEmbedAgent(): void {
     }
   }, 300);
 
-  setTimeout(() => clearInterval(poll), DETECT_TIMEOUT_MS);
+  setTimeout(() => {
+    clearInterval(poll);
+  }, DETECT_TIMEOUT_MS);
 
-  setInterval(() => {
+  const reportTimer = setInterval(() => {
+    if (!isExtensionValid()) {
+      clearInterval(reportTimer);
+      return;
+    }
     if (!adapter.detect()) return;
     send({
       type: "PLAYER_POSITION",

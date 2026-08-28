@@ -35,7 +35,7 @@ export function startSiteAgent(): void {
   sendToWorker({ type: "PLAYER_STATUS", status: "LOADING" });
 
   adapter.setChangeListener((change) => {
-    if (Date.now() < suppressUntil) return;
+    if (!isExtensionValid() || Date.now() < suppressUntil) return;
     switch (change.type) {
       case "play":
         sendToWorker({ type: "PLAY", position: change.position });
@@ -56,6 +56,7 @@ export function startSiteAgent(): void {
   });
 
   function detectPlayer(): void {
+    if (!isExtensionValid()) return;
     const found = findVideo();
     if (found && !adapter.detect()) {
       adapter.setVideo(found);
@@ -64,6 +65,7 @@ export function startSiteAgent(): void {
   }
 
   async function execute(command: SiteCommand): Promise<void> {
+    if (!isExtensionValid()) return;
     suppressUntil = Date.now() + SUPPRESS_MS;
     try {
       switch (command.type) {
@@ -89,37 +91,47 @@ export function startSiteAgent(): void {
     }
   }
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.source !== "wt-worker") return;
-    if (message.kind === "COMMAND") {
-      const event = message.command as ClientEvent | ServerEvent;
-      if (event.type === "CHAT_MESSAGE" && "username" in event && "createdAt" in event) {
-        chatWidget.addMessage({
-          id: event.id,
-          username: event.username,
-          role: event.role,
-          message: event.message,
-          createdAt: event.createdAt,
-        });
-        return;
-      }
-      if (event.type === "JOINED" || event.type === "ROOM_STATE") {
-        if (event.room?.code) {
-          chatWidget.setRoomInfo(event.room.code);
+  if (isExtensionValid()) {
+    try {
+      chrome.runtime.onMessage.addListener((message) => {
+        if (message?.source !== "wt-worker") return;
+        if (message.kind === "COMMAND") {
+          const event = message.command as ClientEvent | ServerEvent;
+          if (event.type === "CHAT_MESSAGE" && "username" in event && "createdAt" in event) {
+            chatWidget.addMessage({
+              id: event.id,
+              username: event.username,
+              role: event.role,
+              message: event.message,
+              createdAt: event.createdAt,
+            });
+            return;
+          }
+          if (event.type === "JOINED" || event.type === "ROOM_STATE") {
+            if (event.room?.code) {
+              chatWidget.setRoomInfo(event.room.code);
+            }
+          }
+          if (
+            event.type === "PLAY" ||
+            event.type === "PAUSE" ||
+            event.type === "SEEK" ||
+            event.type === "RATE_CHANGE"
+          ) {
+            void execute(event as SiteCommand);
+          }
         }
-      }
-      if (
-        event.type === "PLAY" ||
-        event.type === "PAUSE" ||
-        event.type === "SEEK" ||
-        event.type === "RATE_CHANGE"
-      ) {
-        void execute(event as SiteCommand);
-      }
+      });
+    } catch {
+      // ignore
     }
-  });
+  }
 
   const poll = setInterval(() => {
+    if (!isExtensionValid()) {
+      clearInterval(poll);
+      return;
+    }
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
       if (FilmapikAdapter.supportsLocation(lastUrl)) {
@@ -136,6 +148,10 @@ export function startSiteAgent(): void {
   }, URL_POLL_MS);
 
   const reportTimer = setInterval(() => {
+    if (!isExtensionValid()) {
+      clearInterval(reportTimer);
+      return;
+    }
     if (!adapter.detect()) return;
     sendToWorker({
       type: "PLAYER_POSITION",
@@ -146,6 +162,7 @@ export function startSiteAgent(): void {
 
   setTimeout(() => {
     clearInterval(poll);
+    if (!isExtensionValid()) return;
     if (!adapter.detect()) {
       sendToWorker({ type: "PLAYER_STATUS", status: "PLAYER_UNAVAILABLE" });
     }
